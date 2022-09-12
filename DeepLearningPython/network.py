@@ -35,8 +35,10 @@ class Network(object):
         self.num_layers = len(sizes)
         self.sizes = sizes
         self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
-        self.weights = [np.random.randn(y, x)
-                        for x, y in zip(sizes[:-1], sizes[1:])]
+        self.weights = [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
+        """Se definen el tamaño de las listas para  gbias y gweight"""
+        self.gbias = [np.random.randn(y, 1) for y in sizes[1:]]
+        self.gweigth =  [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
 
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
@@ -44,8 +46,7 @@ class Network(object):
             a = tanh(np.dot(w, a)+b)
         return a
 
-    def SGD(self, training_data, epochs, mini_batch_size, eta,
-            test_data=None):
+    def RMSprop(self, training_data, epochs, mini_batch_size, eta, beta, epsilon, test_data=None):
         """Train the neural network using mini-batch stochastic
         gradient descent.  The ``training_data`` is a list of tuples
         ``(x, y)`` representing the training inputs and the desired
@@ -54,7 +55,6 @@ class Network(object):
         network will be evaluated against the test data after each
         epoch, and partial progress printed out.  This is useful for
         tracking progress, but slows things down substantially."""
-
         training_data = list(training_data)
         n = len(training_data)
 
@@ -68,27 +68,33 @@ class Network(object):
                 training_data[k:k+mini_batch_size]
                 for k in range(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
-                self.update_mini_batch(mini_batch, eta)
+                self.update_mini_batch(mini_batch, eta, beta, epsilon)
             if test_data:
                 print("Epoch {} : {} / {}".format(j,self.evaluate(test_data),n_test))
             else:
                 print("Epoch {} complete".format(j))
 
-    def update_mini_batch(self, mini_batch, eta):
+    def update_mini_batch(self, mini_batch, eta, beta, epsilon):
         """Update the network's weights and biases by applying
         gradient descent using backpropagation to a single mini batch.
         The ``mini_batch`` is a list of tuples ``(x, y)``, and ``eta``
         is the learning rate."""
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        nabla_gb = [np.zeros(gb.shape) for gb in self.gbias]
+        nabla_gw = [np.zeros(gw.shape) for gw in self.gweigth]
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-        self.weights = [w-(eta/len(mini_batch))*nw
-                        for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b-(eta/len(mini_batch))*nb
-                       for b, nb in zip(self.biases, nabla_b)]
+            nabla_gb = [beta* ngt+((1-beta)/(len(mini_batch)))*(deltagt**2)
+                        for ngt, deltagt in zip(nabla_gb,delta_nabla_b)]
+            nabla_gw = [beta* ngw+((1-beta)/(len(mini_batch)))*(deltagw**2)
+                        for ngw, deltagw in zip(nabla_gw,delta_nabla_w)]
+        self.weights = [w-(eta/(len(mini_batch)*(np.sqrt(selfgw)+epsilon)))*nw 
+                        for w, selfgw, nw in zip(self.weights, nabla_gw, nabla_w)]
+        self.biases = [b-(eta/(len(mini_batch)*(np.sqrt(selfgb)+epsilon)))*nb 
+                        for b, selfgb, nb in zip(self.biases, nabla_gb, nabla_b)]
 
 
     def backprop(self, x, y):
@@ -141,14 +147,6 @@ class Network(object):
         return (output_activations-y)
 
 #### Miscellaneous functions
-def tanh(z):
-    "Tangente hiperbólica"
-    return (2.0/(1.0+np.exp(-z)))+1
-
-def tanh_prime(z):
-    "Derivada de la tangente hiperbólica"
-    return 4*(np.exp(-2*z))/(np.exp(-2*z)+1)**2
-
 def sigmoid(z):
     """The sigmoid function."""
     return 1.0/(1.0+np.exp(-z))
@@ -156,3 +154,25 @@ def sigmoid(z):
 def sigmoid_prime(z):
     """Derivative of the sigmoid function."""
     return sigmoid(z)*(1-sigmoid(z))
+
+def tanh(z):
+    "Tangente hiperbólica"
+    return (2.0/(1.0+np.exp(-z)))+1
+
+def tanh_prime(z):
+    "Derivada de la tangente hiperbólica"
+    return 4*(np.exp(-2*z))/(np.exp(-2*z)+1)**2
+"""
+def relu(z):
+    for i in z: 
+        if  z >= 0:
+            return 
+        else: 
+            return 0
+
+def relu_prime(z):
+    if  z >= 0:
+        return 1
+    else: 
+        return 0
+"""
